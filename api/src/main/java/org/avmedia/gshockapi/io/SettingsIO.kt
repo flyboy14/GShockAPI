@@ -367,7 +367,7 @@ object SettingsIO {
     suspend fun readH5600Basic(): org.avmedia.gshockapi.model.H5600Basic = freshRaw().let { r ->
         check(r.size >= 17) { "short 0x13 packet" }
         val u = { i: Int -> r[i].toInt() and 0xFF }
-        org.avmedia.gshockapi.model.H5600Basic(u(13), u(14), u(15), u(16))
+        org.avmedia.gshockapi.model.H5600Basic(u(12) and 0x02 != 0, u(13), u(14), u(15), u(16))
     }
 
     /** Writes the DW-H5600 night time onto a fresh 0x13 read; other bytes kept. */
@@ -375,6 +375,7 @@ object SettingsIO {
     suspend fun writeH5600Basic(v: org.avmedia.gshockapi.model.H5600Basic) = modifyRaw { b ->
         check(b.size >= 17) { "short 0x13 packet" }
         require(v.nightStartHour in 0..23 && v.nightEndHour in 0..23 && v.nightStartMin in 0..59 && v.nightEndMin in 0..59) { "bad night time" }
+        b[12] = (if (v.stepReminder) b[12].toInt() or 0x02 else b[12].toInt() and 0x02.inv()).toByte()
         b[13] = v.nightStartHour.toByte(); b[14] = v.nightStartMin.toByte()
         b[15] = v.nightEndHour.toByte(); b[16] = v.nightEndMin.toByte()
     }

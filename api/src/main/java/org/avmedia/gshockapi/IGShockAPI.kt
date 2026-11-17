@@ -558,6 +558,8 @@ interface IGShockAPI {
     suspend fun setH5600StepGoal(goal: org.avmedia.gshockapi.model.StepGoal) {}
     suspend fun getH5600Physical(): org.avmedia.gshockapi.model.H5600Physical? = null
     suspend fun setH5600Physical(value: org.avmedia.gshockapi.model.H5600Physical) {}
+    suspend fun getH5600ModeList(): List<Int>? = null
+    suspend fun setH5600ModeList(modes: List<Int>) {}
     suspend fun getH5600Basic(): org.avmedia.gshockapi.model.H5600Basic? = null
     suspend fun setH5600Basic(value: org.avmedia.gshockapi.model.H5600Basic) {}
 

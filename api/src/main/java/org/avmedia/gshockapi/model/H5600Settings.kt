@@ -63,6 +63,8 @@ enum class HeartRateMonitor(val code: Int) {
  * (byte 5) and font (byte 8 bit 0x20) there, but the DW-H5600 does not keep them (tested 2026-11-17).
  */
 data class H5600Basic(
+    /** Step (inactivity) reminder: byte 12 bit 0x02 (CASIO `stepReminder`; kept by the watch, tested 2026-11-17). */
+    val stepReminder: Boolean,
     val nightStartHour: Int,
     val nightStartMin: Int,
     val nightEndHour: Int,
@@ -89,3 +91,34 @@ data class H5600Physical(
 
 /** DW-H5600 targets, packet 0x43 (CASIO WatchSettingForTargetValueData): bytes 1-3 daily steps (LE), byte 16 bit 0x01 goal notification. */
 data class StepGoal(val steps: Int, val notifyWhenReached: Boolean)
+
+/**
+ * DW-H5600 watch modes in button order, packet 0x52 (CASIO WIDGET_LIST): `52 <mode ids> 00…` (first = 01 Time & date),
+ * 20 bytes. A mode left out of the list is hidden on the watch (tested 2026-11-17).
+ */
+enum class WatchMode(val code: Int, val label: String) {
+    TIME_AND_DATE(0x01, "Time & date"),
+    HEART_RATE(0x02, "Heart rate"),
+    LIFE_LOG(0x03, "Life log"),
+    STRESS(0x04, "Stress"),
+    NIGHTLY_RECHARGE(0x05, "Nightly recharge"),
+    ACTIVITY_LOG(0x06, "Activity log"),
+    CARDIO_LOAD(0x07, "Cardio load"),
+    BREATHING(0x08, "Breathing exercise"),
+    NOTIFICATIONS(0x09, "Notifications"),
+    BLOOD_OXYGEN(0x0A, "Blood oxygen"),
+    ALTIMETER(0x0B, "Altimeter"),
+    BAROMETER(0x0C, "Barometer"),
+    COMPASS(0x0D, "Compass"),
+    STOPWATCH(0x0E, "Stopwatch"),
+    TIMER(0x0F, "Timer"),
+    WORLD_TIME(0x10, "World time"),
+    ALMANAC(0x11, "Sun & moon"),
+    QR(0x12, "QR code"),
+    TIDE(0x13, "Tide"),
+    ;
+
+    companion object {
+        fun fromCode(code: Int): WatchMode? = entries.firstOrNull { it.code == code }
+    }
+}

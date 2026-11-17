@@ -250,6 +250,26 @@ object H5600SettingsIO {
         }
     }
 
+    // ---- Watch mode list (0x52) ----
+
+    const val MODE_LIST_CODE = 0x52
+    private const val MODE_LIST_SIZE = 20
+
+    /** Mode ids in button order, from byte 1 (01 = Time & date first); 0 bytes = end of list. */
+    suspend fun getModeList(): List<Int> =
+        readChecked(MODE_LIST_CODE, MODE_LIST_SIZE).drop(1).takeWhile { it != 0 }
+
+    suspend fun setModeList(modes: List<Int>) {
+        require(modes.isNotEmpty() && modes.size <= MODE_LIST_SIZE - 1) { "1-${MODE_LIST_SIZE - 1} modes" }
+        require(modes.all { it in 1..0xFF } && modes.distinct().size == modes.size) { "bad mode list" }
+        modifyChecked(MODE_LIST_CODE, MODE_LIST_SIZE) { p ->
+            IntArray(MODE_LIST_SIZE).also {
+                it[0] = MODE_LIST_CODE
+                modes.forEachIndexed { i, m -> it[1 + i] = m }
+            }
+        }
+    }
+
     // ---- Basic settings restore (0x13) ----
 
     /**
