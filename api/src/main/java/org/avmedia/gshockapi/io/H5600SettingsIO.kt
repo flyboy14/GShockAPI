@@ -106,6 +106,17 @@ object H5600SettingsIO {
         runCatching { setHomeLocation(loc.first, loc.second) }.onFailure { Timber.e(it, "0x24 location write failed") }
     }
 
+    /** World city 1's location (`24 01 …`), written after the home location like the official app. */
+    fun writeWorldCityLocation(zone: java.time.ZoneId) {
+        if (!isSupported()) return
+        runCatching {
+            val (lat, lon, _) = org.avmedia.gshockapi.casio.CasioTimeZoneHelper.getWorldCityCoordinates(zone)
+            val buf = java.nio.ByteBuffer.allocate(20).order(java.nio.ByteOrder.BIG_ENDIAN)
+            buf.put(0x24.toByte()).put(0x01).put(0x01).putDouble(lat).putDouble(lon).put(0x04)
+            RawSettingIO.write(buf.array().map { it.toInt() and 0xFF }.toIntArray())
+        }.onFailure { Timber.e(it, "0x24 01 world-city location write failed") }
+    }
+
     fun setHomeLocation(latitude: Double, longitude: Double) {
         checkSupported()
         require(isValid(latitude, longitude)) { "Bad coordinates" }

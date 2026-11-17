@@ -528,6 +528,12 @@ interface IGShockAPI {
     /** DW-H5600: where the location re-sent after every time/city sync comes from. */
     fun setH5600HomeLocationProvider(provider: (() -> Pair<Double, Double>?)?) {}
 
+    /**
+     * The watch's world city (city 1) as (IANA zone, name), asked on every time sync; null keeps
+     * the watch's own.
+     */
+    fun setWorldCityProvider(provider: (() -> Pair<String, String>?)?) {}
+
     /** DW-H5600: remember the location (no write); it is re-sent after every time/city sync. */
     fun rememberH5600HomeLocation(latitude: Double, longitude: Double) {}
 

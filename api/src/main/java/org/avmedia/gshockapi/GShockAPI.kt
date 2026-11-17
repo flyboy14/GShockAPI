@@ -864,6 +864,10 @@ class GShockAPI(private val context: Context) : IGShockAPI {
         H5600SettingsIO.homeLocationProvider = provider
     }
 
+    override fun setWorldCityProvider(provider: (() -> Pair<String, String>?)?) {
+        org.avmedia.gshockapi.io.TimeIO.worldCityProvider = provider
+    }
+
     override fun rememberH5600HomeLocation(latitude: Double, longitude: Double) =
         H5600SettingsIO.rememberHomeLocation(latitude, longitude)
 

@@ -173,6 +173,28 @@ object TimeIO {
 
     private var state = State()
 
+    /**
+     * The watch's first world city (city 1), as (IANA zone, name), or null to keep whatever the
+     * watch has. Asked on every time sync, which rewrites cities 0 and 1 anyway.
+     */
+    @Volatile
+    var worldCityProvider: (() -> Pair<String, String>?)? = null
+
+    /** World city for this sync, resolved once (null = keep the watch's own). */
+    private data class WorldCity(val tz: CasioTimeZoneHelper.CasioTimeZone, val name: String)
+
+    private var worldCity: WorldCity? = null
+
+    private fun resolveWorldCity(): WorldCity? {
+        if (WatchInfo.worldCitiesCount < 2) return null
+        val (zone, name) = runCatching { worldCityProvider?.invoke() }.getOrNull() ?: return null
+        val tz = runCatching { CasioTimeZoneHelper.findTimeZone(zone) }.getOrNull() ?: return null
+        // The watch shows A-Z, 0-9 and spaces; up to 18 characters.
+        val clean = name.uppercase().map { if (it in 'A'..'Z' || it in '0'..'9' || it == ' ') it else ' ' }
+            .joinToString("").trim().replace(Regex(" +"), " ").take(18)
+        return WorldCity(tz, clean.ifEmpty { WorldCitiesIO.parseCity(zone) ?: zone }.take(18))
+    }
+
     fun setTimezone(timeZone: String) {
         state =
             state.copy(
@@ -206,17 +228,33 @@ object TimeIO {
     private suspend fun getDSTWatchStateWithTZ(dstState: IO.DstState): String {
         val origDTS = getDSTWatchState(dstState)
         val dstValue = TimeIOFunctional.calculateDSTValue(state.casioTimezone)
-        return DstWatchStateIO.setDST(origDTS, dstValue)
+        val withHome = DstWatchStateIO.setDST(origDTS, dstValue)
+        // 1D 00 01 DST0 DST1 ...: DST1 belongs to world city 1.
+        val world = worldCity ?: return withHome
+        val ints = Utils.toIntArray(withHome)
+        if (ints.size < 5) return withHome
+        ints[4] = TimeIOFunctional.calculateDSTValue(world.tz)
+        return Utils.fromByteArrayToHexStrWithSpaces(Utils.byteArrayOfIntArray(ints.toIntArray()))
     }
 
-    private suspend fun getDSTForWorldCities(cityNum: Int): String = DstForWorldCitiesIO.request(cityNum)
+    private suspend fun getDSTForWorldCities(cityNum: Int): String {
+        val orig = DstForWorldCitiesIO.request(cityNum)
+        val world = worldCity
+        return if (cityNum == 1 && world != null) DstForWorldCitiesIO.setDST(orig, world.tz) else orig
+    }
 
     private suspend fun getDSTForWorldCitiesWithTZ(cityNum: Int): String {
         val origDSTForCity = getDSTForWorldCities(cityNum)
         return DstForWorldCitiesIO.setDST(origDSTForCity, state.casioTimezone)
     }
 
-    private suspend fun getWorldCities(cityNum: Int): String = WorldCitiesIO.request(cityNum)
+    private suspend fun getWorldCities(cityNum: Int): String {
+        val world = worldCity
+        if (cityNum != 1 || world == null) return WorldCitiesIO.request(cityNum)
+        val encoded = WorldCitiesIO.encodeAndPad(world.name, cityNum)
+        IO.removeFromCache(encoded)
+        return encoded
+    }
 
     private suspend fun getWorldCitiesWithTZ(cityNum: Int): String {
         val newCity = WorldCitiesIO.parseCity(state.timeZone)
@@ -229,10 +267,12 @@ object TimeIO {
      * This function is internally called by [set] to initialize some values.
      */
     private suspend fun initializeForSettingTime() {
+        worldCity = resolveWorldCity()
         writeDST()
         writeDSTForWorldCities()
         // DW-H5600: location (0x24) goes here, between 1E and 1F, exactly like the official app.
         H5600SettingsIO.writeLocationInTimeSync()
+        worldCity?.let { H5600SettingsIO.writeWorldCityLocation(it.tz.zoneId) }
         if (WatchInfo.hasWorldCities) {
             writeWorldCities()
         } else if (WatchInfo.hasHomeTime) {
