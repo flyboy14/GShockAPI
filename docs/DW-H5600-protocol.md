@@ -2,7 +2,13 @@
 
 Everything here was decoded from Android Bluetooth (HCI snoop) captures of the official
 **CASIO WATCHES** app talking to a DW-H5600-1 (module 3516), plus izivkov's own DW-H5600
-captures in the Python `gshock_api` repository. "Confirmed" means verified on the watch.
+captures in the Python `gshock_api` repository, and (2026-11-17) from the official app's own code:
+packet codes from its Java `casiolib`, field layouts from its Flutter code decompiled with blutter
+(how: the app's `docs/DW-H5600-DEVELOPMENT.md`). "Confirmed" means a write was read back changed on
+the watch; the watch acknowledges many writes it then ignores.
+
+Read sweep (2026-11-17): the watch answers `10 11 13 15 16 18 1D 1E 1F 20 22 23 24 25 26 27 28 2A 2F
+39 3A 3B 40 41 42 43 44 45 47 4F 50 51 52 53 56 57 58 5A`; every other code is rejected (`FF 81 xx`).
 
 ## Transport
 
@@ -27,16 +33,20 @@ does not implement); `RawSettingIO.onRejected` fails the pending read at once.
 | `0x51` | 6 | Watch face. byte 1: `01` face 1 (simple, weekday), `02` face 2 (customisable). bytes 2–5 (all equal): face-2 item `00` steps, `0A` heart rate, `0B` heart rate min/max, `0E` sleep evaluation, `12` sunrise/sunset, `13` moon. | Confirmed |
 | `0x50` | 5 | Smart alarm (one slot): `50 <hour> <minute> <flags> <window>`; flags `0x01` on, `0x02` snooze; window = minutes before (15/30/45/60). | Confirmed |
 | `0x24` | 20 | Location: `24 <slot> 01 <lat f64 BE> <lon f64 BE> <flag>`; slot 0 = home (sunrise/sunset), slot 1 = world city 2. Current official app uses flag `04` (an older capture had `01`). | Confirmed |
-| `0x13` | 17 | Basic settings. byte 1 bit `0x01` = 24 h; byte 12 bit `0x20` = hourly time signal. bytes 13–16 (`17 00 08 14`) look like a sleep schedule (23:00 / 08:20). | Bits confirmed; 13–16 likely |
+| `0x13` | 17 | Basic settings. byte 1 bit `0x01` = 24 h; byte 12 bit `0x20` = hourly time signal, bit `0x02` = step reminder; bytes 13–16 = night time start h, m, end h, m (binary, `17 00 08 14` = 23:00–08:20). Not kept by this watch: byte 4 date order, byte 5 weekday language, byte 8 bit `0x20` font, byte 10 bit `0x01` operation vibration. | Confirmed |
 | `0x15` / `0x16` | 5 / 17 | Alarms 1 / 2–5: `<flags> <00> <hour> <minute>`; flags `0x40` on, `0x10` snooze, `0x20` one-time, `0x80` hourly chime (alarm 1). The watch keeps byte 1 = `00`. | Confirmed |
 | `0x18` | 15 | Countdown timer: `18 <h> <m> <s> 00 03 …`; byte 5 = `03` meaning unknown (kept). | Length confirmed |
 | `0x1D` / `0x1E` / `0x1F` | | DST / world-city rules / city names. | (library) |
 | `0x3D` | 17–18 | Status report the watch sends after DST/city writes (`3D 02/11/12 …`) and on request `3D 30`. The official app only reads it. | Not a request |
-| `0x4F` | 10 | `4F 02 17 00 08 14 00 be 37 35`: probably sleep/wake schedule (23:00 / 08:20). | Unconfirmed |
-| `0x43` | 17 | `43 10 27 …`: probably the daily step goal (0x2710 = 10 000). | Unconfirmed |
-| `0x45` | 11 | User profile (name from the Python library); content not decoded. | Unconfirmed |
+| `0x41` | 5 | Heart-rate monitor (CASIO_SETTING_FOR_HEART_RATE_MONITOR). byte 1 bits 0–1: `0` off, `1` activities + night (RunActOnly), `2` all day (AlwaysOn). Bits 2–4 (zone alert) and byte 2 (zone) are dropped by this watch. | Bits 0–1 confirmed |
+| `0x43` | 17 | Targets (CASIO_SETTING_FOR_TARGET_VALUE): bytes 1–3 daily steps (LE, `10 27 00` = 10 000), byte 16 bit `0x01` notify when reached. | Confirmed |
+| `0x4F` | 10 | Physical settings: byte 1 training background, bytes 2–5 sleep onset h, m / wake h, m, byte 6 flags (`0x01` max HR, `0x02` resting HR set by the user), byte 7 max HR, byte 8 resting HR, byte 9 VO2max. | Confirmed (sleep time, HR values) |
+| `0x52` | 20 | Watch modes in button order (CASIO WIDGET_LIST), from byte 1, `00` = end. A mode left out is hidden. IDs: `01` time & date, `02` heart rate, `03` life log, `04` stress, `05` nightly recharge, `06` activity log, `07` cardio load, `08` breathing, `09` notifications, `0A` blood oxygen, `0B` altimeter, `0C` barometer, `0D` compass, `0E` stopwatch, `0F` timer, `10` world time, `11` almanac, `12` QR, `13` tide. | Confirmed (order, hiding) |
+| `0x45` | 11 | User profile (CASIO_SETTING_FOR_USER_PROFILE). The official app's layout (BCD height, weight, birth date) is not what this watch keeps; writes are dropped. | Not writable |
+| `0x2F`, `0x40` | 6 | Sensor units / run measurement. Miles (`0x2F` byte 4 bit `0x02`) and auto pause (`0x40` byte 1 bit `0x02`) are dropped. | Not writable |
 | `0x21` | 3 | `21 00 04` / `21 01 04` written by the official app while browsing its screens. | Unknown |
-| `0x25`, `0x2F`, `0x3A`, `0x3B`, `0x40`, `0x41`, `0x52`, `0x5A` | | Read / echoed by the official app on connect. | Unknown |
+| `0x2D` | | Exercise profile used by other models; this watch rejects it (`FF 81 2D`). | Not implemented |
+| `0x25`, `0x2A`, `0x3A`, `0x3B`, `0x53`, `0x57`, `0x5A` | | Answered; partly named (0x2A program timer, 0x3A/0x3B connection/advertising parameters, 0x53 activity list, 0x57 activity settings, 0x5A operation log). | Not decoded |
 
 ## Time sync and sunrise/sunset
 
@@ -60,6 +70,14 @@ each `05 …` CONVOY fragment is acked with `07 00 …` and index announcements 
 `07 2e …` / END `04 2e …` are echoed on DRSP. Decoding: strip `05` + 2-byte checksum, concatenate,
 XOR `0xFF`; 20-byte header (time UTC, day steps int32 at 14), frame `50` = 5-minute step slots.
 Verified: izivkov's capture -4 → 624 steps (= official app); the user's own sync → 351.
+
+**The sync is incremental.** The watch sends only what has not been fetched before; a sync right
+after a sync carries just the newest 5-minute slots. START's last five bytes (`FF FFFFFFFF`) are the
+CASIO app's "all" selector (`writeCasioDataRequestSPForQW3515Lifelog(cmd, type, idx, len)`); there is
+no date parameter, so old data cannot be requested again. Store every sync.
+
+Frame `63` (daily summary, sent when a day is complete): 109-byte records, date BCD `yy mm dd` at
+0–2, steps int32 LE at 10, step goal int32 LE at 14 (layout from izivkov's `parse_lifelog.py`).
 
 ## Safer encoders (shared code)
 
