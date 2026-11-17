@@ -553,9 +553,7 @@ interface IGShockAPI {
     /** DW-H5600: sets the heart-rate monitor mode; returns the code before. */
     suspend fun setH5600HeartRateMonitor(mode: org.avmedia.gshockapi.model.HeartRateMonitor): Int? = null
 
-    /** DW-H5600 HR zone alert (0x41), step goal (0x43), physical settings (0x4F), display/night fields (0x13). */
-    suspend fun getH5600HeartRateZoneAlert(): org.avmedia.gshockapi.model.HeartRateZoneAlert? = null
-    suspend fun setH5600HeartRateZoneAlert(alert: org.avmedia.gshockapi.model.HeartRateZoneAlert) {}
+    /** DW-H5600 step goal (0x43), physical settings (0x4F), display/night fields (0x13). */
     suspend fun getH5600StepGoal(): org.avmedia.gshockapi.model.StepGoal? = null
     suspend fun setH5600StepGoal(goal: org.avmedia.gshockapi.model.StepGoal) {}
     suspend fun getH5600Physical(): org.avmedia.gshockapi.model.H5600Physical? = null

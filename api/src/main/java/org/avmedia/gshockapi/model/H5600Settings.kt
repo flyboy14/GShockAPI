@@ -57,35 +57,12 @@ enum class HeartRateMonitor(val code: Int) {
     }
 }
 
-/** DW-H5600 date order on the watch: 0x13 byte 4 (CASIO DateOrder enum). */
-enum class DateOrder(val code: Int, val label: String) {
-    YMD(0, "Y-M-D"), YDM(1, "Y-D-M"), MDY(2, "M-D-Y"), DMY(3, "D-M-Y");
-
-    companion object {
-        fun fromCode(code: Int): DateOrder? = entries.firstOrNull { it.code == code }
-    }
-}
-
-/** DW-H5600 weekday language: 0x13 byte 5 (CASIO WeekLanguage enum). */
-enum class WeekLanguage(val code: Int, val label: String) {
-    ENGLISH(0, "English"), SPANISH(1, "Spanish"), FRENCH(2, "French"),
-    GERMAN(3, "German"), ITALIAN(4, "Italian"), RUSSIAN(5, "Russian");
-
-    companion object {
-        fun fromCode(code: Int): WeekLanguage? = entries.firstOrNull { it.code == code }
-    }
-}
-
 /**
- * DW-H5600 display / night-time fields of the basic settings packet 0x13 (offsets from the CASIO
- * app's WatchSettingForBasicData, packet index = data index + 1):
- * byte 4 date order, byte 5 weekday language, byte 8 bit 0x20 font (0 Squad, 1 7-segment),
- * bytes 13-16 night time start h, m, end h, m (binary).
+ * DW-H5600 night time in the basic settings packet 0x13, bytes 13-16: start h, m, end h, m (binary;
+ * CASIO WatchSettingForBasicData). The CASIO app also has date order (byte 4), weekday language
+ * (byte 5) and font (byte 8 bit 0x20) there, but the DW-H5600 does not keep them (tested 2026-11-17).
  */
 data class H5600Basic(
-    val dateOrder: Int,
-    val weekLanguage: Int,
-    val sevenSegmentFont: Boolean,
     val nightStartHour: Int,
     val nightStartMin: Int,
     val nightEndHour: Int,
@@ -108,17 +85,6 @@ data class H5600Physical(
     val restingHr: Int,
     val restingHrManual: Boolean,
     val vo2Max: Int,
-)
-
-/**
- * DW-H5600 heart-rate zone alert, inside packet 0x41 (CASIO WatchSettingForHeartRateMonitorData):
- * byte 1 bit 0x10 alert on, bit 0x04 notify when back in the zone, bit 0x08 set = custom range instead
- * of a zone; byte 2 = zone 1-5.
- */
-data class HeartRateZoneAlert(
-    val enabled: Boolean,
-    val notifyInRange: Boolean,
-    val zone: Int,
 )
 
 /** DW-H5600 targets, packet 0x43 (CASIO WatchSettingForTargetValueData): bytes 1-3 daily steps (LE), byte 16 bit 0x01 goal notification. */

@@ -829,9 +829,6 @@ class GShockAPI(private val context: Context) : IGShockAPI {
 
     override suspend fun getH5600HeartRateMonitorCode(): Int? = H5600SettingsIO.getHeartRateMonitorCode()
 
-    override suspend fun getH5600HeartRateZoneAlert() = H5600SettingsIO.getHeartRateZoneAlert()
-    override suspend fun setH5600HeartRateZoneAlert(alert: org.avmedia.gshockapi.model.HeartRateZoneAlert) =
-        H5600SettingsIO.setHeartRateZoneAlert(alert)
     override suspend fun getH5600StepGoal() = H5600SettingsIO.getStepGoal()
     override suspend fun setH5600StepGoal(goal: org.avmedia.gshockapi.model.StepGoal) = H5600SettingsIO.setStepGoal(goal)
     override suspend fun getH5600Physical() = H5600SettingsIO.getPhysical()

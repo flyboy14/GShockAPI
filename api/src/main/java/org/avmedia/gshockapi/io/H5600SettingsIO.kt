@@ -203,27 +203,6 @@ object H5600SettingsIO {
             p.copyOf().also { it[1] = (it[1] and 0x03.inv()) or mode.code }
         }[1] and 0x03
 
-    // ---- Heart-rate zone alert (0x41) ----
-
-    suspend fun getHeartRateZoneAlert(): org.avmedia.gshockapi.model.HeartRateZoneAlert =
-        readChecked(HEART_RATE_MONITOR_CODE, HEART_RATE_MONITOR_SIZE).let { p ->
-            org.avmedia.gshockapi.model.HeartRateZoneAlert(p[1] and 0x10 != 0, p[1] and 0x04 != 0, p[2].takeIf { it in 1..5 } ?: 1)
-        }
-
-    /** Zone mode (bit 0x08 cleared), like the official app; condition bits 0-1 and the custom range kept. */
-    suspend fun setHeartRateZoneAlert(a: org.avmedia.gshockapi.model.HeartRateZoneAlert) {
-        require(a.zone in 1..5) { "zone must be 1-5" }
-        modifyChecked(HEART_RATE_MONITOR_CODE, HEART_RATE_MONITOR_SIZE) { p ->
-            p.copyOf().also {
-                var b = it[1] and (0x10 or 0x04 or 0x08).inv()
-                if (a.enabled) b = b or 0x10
-                if (a.notifyInRange) b = b or 0x04
-                it[1] = b
-                it[2] = a.zone
-            }
-        }
-    }
-
     // ---- Step goal (0x43) ----
 
     const val TARGET_CODE = 0x43
