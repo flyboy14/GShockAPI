@@ -561,6 +561,12 @@ interface IGShockAPI {
     suspend fun getH5600Basic(): org.avmedia.gshockapi.model.H5600Basic? = null
     suspend fun setH5600Basic(value: org.avmedia.gshockapi.model.H5600Basic) {}
 
+    /**
+     * Debug / protocol probing: sends raw bytes. [read] = true sends a read request (first byte =
+     * code) on the request characteristic, false writes the packet. Replies show up in the log.
+     */
+    fun h5600RawSend(read: Boolean, bytes: IntArray) {}
+
     /** Writes back a full 0x13 packet previously read from this watch. */
     fun restoreH5600BasicSettings(packet: IntArray) {}
 }

@@ -42,6 +42,12 @@ object RawSettingIO {
 
     private class Rejected(code: Int) : IllegalStateException("watch rejected 0x%02X (busy?)".format(code))
 
+    /** Debug probing: raw read request ([read]) or raw packet write, no bookkeeping. */
+    fun sendRaw(read: Boolean, bytes: IntArray) {
+        Timber.i("RawSettingIO raw ${if (read) "GET" else "SET"}: ${bytes.toHex()}")
+        IO.writeCmd(if (read) GetSetMode.GET else GetSetMode.SET, Utils.byteArrayOfIntArray(bytes))
+    }
+
     /** Reads packet [code] from the watch; throws after [tries] unanswered or rejected tries. */
     suspend fun request(code: Int, tries: Int = TRIES): IntArray {
         var last: Throwable = IllegalStateException("no answer to 0x%02X".format(code))
