@@ -361,6 +361,27 @@ object SettingsIO {
         rememberRaw(b)
     }
 
+    /** DW-H5600 display / night-time fields from one fresh 0x13 read. */
+    @RequiresApi(Build.VERSION_CODES.O)
+    suspend fun readH5600Basic(): org.avmedia.gshockapi.model.H5600Basic = freshRaw().let { r ->
+        check(r.size >= 17) { "short 0x13 packet" }
+        val u = { i: Int -> r[i].toInt() and 0xFF }
+        org.avmedia.gshockapi.model.H5600Basic(u(4), u(5), u(8) and 0x20 != 0, u(13), u(14), u(15), u(16))
+    }
+
+    /** Writes the DW-H5600 display / night-time fields onto a fresh 0x13 read; other bytes kept. */
+    @RequiresApi(Build.VERSION_CODES.O)
+    suspend fun writeH5600Basic(v: org.avmedia.gshockapi.model.H5600Basic) = modifyRaw { b ->
+        check(b.size >= 17) { "short 0x13 packet" }
+        require(v.dateOrder in 0..3 && v.weekLanguage in 0..5) { "bad date order / language" }
+        require(v.nightStartHour in 0..23 && v.nightEndHour in 0..23 && v.nightStartMin in 0..59 && v.nightEndMin in 0..59) { "bad night time" }
+        b[4] = v.dateOrder.toByte()
+        b[5] = v.weekLanguage.toByte()
+        b[8] = (if (v.sevenSegmentFont) b[8].toInt() or 0x20 else b[8].toInt() and 0x20.inv()).toByte()
+        b[13] = v.nightStartHour.toByte(); b[14] = v.nightStartMin.toByte()
+        b[15] = v.nightEndHour.toByte(); b[16] = v.nightEndMin.toByte()
+    }
+
     /** Flips only the 24-hour bit of a freshly read 0x13 packet; every other byte is kept. */
     @RequiresApi(Build.VERSION_CODES.O)
     suspend fun writeTimeFormat24h(is24h: Boolean) = modifyRaw { b ->

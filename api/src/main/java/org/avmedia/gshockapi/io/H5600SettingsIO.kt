@@ -1,6 +1,7 @@
 package org.avmedia.gshockapi.io
 
 import org.avmedia.gshockapi.WatchInfo
+import org.avmedia.gshockapi.model.HeartRateMonitor
 import org.avmedia.gshockapi.model.SmartAlarm
 import org.avmedia.gshockapi.model.SoundMode
 import org.avmedia.gshockapi.model.WatchFaceItem
@@ -22,6 +23,15 @@ object H5600SettingsIO {
     const val SOUND_MODE_CODE = 0x42
     const val WATCH_FACE_CODE = 0x51
     const val SMART_ALARM_CODE = 0x50
+
+    /**
+     * CASIO_SETTING_FOR_HEART_RATE_MONITOR (5 bytes), decoded from the CASIO app (Dart class
+     * WatchSettingForHeartRateMonitorData): byte 1 bits 0-1 = monitoring condition (0 Off,
+     * 1 RunActOnly, 2 AlwaysOn), bit 2 in-range notification, bit 3 = NOT use target, bit 4 alert;
+     * byte 2 = selected target; bytes 3/4 = plan heart-rate limits.
+     */
+    const val HEART_RATE_MONITOR_CODE = 0x41
+    private const val HEART_RATE_MONITOR_SIZE = 5
 
     /** CASIO_CURRENT_TIME_MANAGER. The official app requests it after connecting and writes the reply back. */
     const val TIME_MANAGER_CODE = 0x39
@@ -177,6 +187,87 @@ object H5600SettingsIO {
             if (a.enabled) flags = flags or 0x01
             if (a.snooze) flags = flags or 0x02
             intArrayOf(SMART_ALARM_CODE, a.hour, a.minute, flags, a.windowMin)
+        }
+    }
+
+    // ---- Heart-rate monitor (0x41) ----
+
+    /** Raw monitoring condition (bits 0-1 of byte 1 of 0x41), also for values not in [HeartRateMonitor]. */
+    suspend fun getHeartRateMonitorCode(): Int = readChecked(HEART_RATE_MONITOR_CODE, HEART_RATE_MONITOR_SIZE)[1] and 0x03
+
+    suspend fun getHeartRateMonitorHex(): String = readChecked(HEART_RATE_MONITOR_CODE, HEART_RATE_MONITOR_SIZE).toHex()
+
+    /** Sets only the monitoring condition; alert bits, target and limits are kept. Returns the condition before. */
+    suspend fun setHeartRateMonitor(mode: HeartRateMonitor): Int =
+        modifyChecked(HEART_RATE_MONITOR_CODE, HEART_RATE_MONITOR_SIZE) { p ->
+            p.copyOf().also { it[1] = (it[1] and 0x03.inv()) or mode.code }
+        }[1] and 0x03
+
+    // ---- Heart-rate zone alert (0x41) ----
+
+    suspend fun getHeartRateZoneAlert(): org.avmedia.gshockapi.model.HeartRateZoneAlert =
+        readChecked(HEART_RATE_MONITOR_CODE, HEART_RATE_MONITOR_SIZE).let { p ->
+            org.avmedia.gshockapi.model.HeartRateZoneAlert(p[1] and 0x10 != 0, p[1] and 0x04 != 0, p[2].takeIf { it in 1..5 } ?: 1)
+        }
+
+    /** Zone mode (bit 0x08 cleared), like the official app; condition bits 0-1 and the custom range kept. */
+    suspend fun setHeartRateZoneAlert(a: org.avmedia.gshockapi.model.HeartRateZoneAlert) {
+        require(a.zone in 1..5) { "zone must be 1-5" }
+        modifyChecked(HEART_RATE_MONITOR_CODE, HEART_RATE_MONITOR_SIZE) { p ->
+            p.copyOf().also {
+                var b = it[1] and (0x10 or 0x04 or 0x08).inv()
+                if (a.enabled) b = b or 0x10
+                if (a.notifyInRange) b = b or 0x04
+                it[1] = b
+                it[2] = a.zone
+            }
+        }
+    }
+
+    // ---- Step goal (0x43) ----
+
+    const val TARGET_CODE = 0x43
+    private const val TARGET_SIZE = 17
+
+    suspend fun getStepGoal(): org.avmedia.gshockapi.model.StepGoal =
+        readChecked(TARGET_CODE, TARGET_SIZE).let { p ->
+            org.avmedia.gshockapi.model.StepGoal(p[1] or (p[2] shl 8) or (p[3] shl 16), p[16] and 0x01 != 0)
+        }
+
+    suspend fun setStepGoal(g: org.avmedia.gshockapi.model.StepGoal) {
+        require(g.steps in 1..99_999) { "step goal out of range" }
+        modifyChecked(TARGET_CODE, TARGET_SIZE) { p ->
+            p.copyOf().also {
+                it[1] = g.steps and 0xFF; it[2] = (g.steps shr 8) and 0xFF; it[3] = (g.steps shr 16) and 0xFF
+                it[16] = if (g.notifyWhenReached) it[16] or 0x01 else it[16] and 0x01.inv()
+            }
+        }
+    }
+
+    // ---- Physical settings (0x4F): sleep time, max / resting HR, VO2max ----
+
+    const val PHYSICAL_CODE = 0x4F
+    private const val PHYSICAL_SIZE = 10
+
+    suspend fun getPhysical(): org.avmedia.gshockapi.model.H5600Physical =
+        readChecked(PHYSICAL_CODE, PHYSICAL_SIZE).let { p ->
+            org.avmedia.gshockapi.model.H5600Physical(
+                p[2], p[3], p[4], p[5], p[7], p[6] and 0x01 != 0, p[8], p[6] and 0x02 != 0, p[9],
+            )
+        }
+
+    /** Writes sleep time and the HR values; the "entered by user" flags follow the *Manual fields, VO2max kept. */
+    suspend fun setPhysical(v: org.avmedia.gshockapi.model.H5600Physical) {
+        require(v.sleepStartHour in 0..23 && v.wakeHour in 0..23 && v.sleepStartMin in 0..59 && v.wakeMin in 0..59) { "bad sleep time" }
+        require(v.maxHr in 100..230 && v.restingHr in 30..120) { "bad heart rate" }
+        modifyChecked(PHYSICAL_CODE, PHYSICAL_SIZE) { p ->
+            p.copyOf().also {
+                it[2] = v.sleepStartHour; it[3] = v.sleepStartMin; it[4] = v.wakeHour; it[5] = v.wakeMin
+                var f = it[6] and 0x03.inv()
+                if (v.maxHrManual) f = f or 0x01
+                if (v.restingHrManual) f = f or 0x02
+                it[6] = f; it[7] = v.maxHr; it[8] = v.restingHr
+            }
         }
     }
 

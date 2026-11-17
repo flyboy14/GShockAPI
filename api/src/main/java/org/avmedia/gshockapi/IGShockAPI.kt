@@ -547,6 +547,22 @@ interface IGShockAPI {
     /** Raw watch-face display-item code (for values not yet named); null if unknown/inconsistent. */
     suspend fun getWatchFaceCode(): Int? = null
 
+    /** DW-H5600 heart-rate monitor mode (0x41 byte 1), raw code; null if unsupported. */
+    suspend fun getH5600HeartRateMonitorCode(): Int? = null
+
+    /** DW-H5600: sets the heart-rate monitor mode; returns the code before. */
+    suspend fun setH5600HeartRateMonitor(mode: org.avmedia.gshockapi.model.HeartRateMonitor): Int? = null
+
+    /** DW-H5600 HR zone alert (0x41), step goal (0x43), physical settings (0x4F), display/night fields (0x13). */
+    suspend fun getH5600HeartRateZoneAlert(): org.avmedia.gshockapi.model.HeartRateZoneAlert? = null
+    suspend fun setH5600HeartRateZoneAlert(alert: org.avmedia.gshockapi.model.HeartRateZoneAlert) {}
+    suspend fun getH5600StepGoal(): org.avmedia.gshockapi.model.StepGoal? = null
+    suspend fun setH5600StepGoal(goal: org.avmedia.gshockapi.model.StepGoal) {}
+    suspend fun getH5600Physical(): org.avmedia.gshockapi.model.H5600Physical? = null
+    suspend fun setH5600Physical(value: org.avmedia.gshockapi.model.H5600Physical) {}
+    suspend fun getH5600Basic(): org.avmedia.gshockapi.model.H5600Basic? = null
+    suspend fun setH5600Basic(value: org.avmedia.gshockapi.model.H5600Basic) {}
+
     /** Writes back a full 0x13 packet previously read from this watch. */
     fun restoreH5600BasicSettings(packet: IntArray) {}
 }
