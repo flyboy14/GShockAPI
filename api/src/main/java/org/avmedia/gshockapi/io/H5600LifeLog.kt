@@ -90,17 +90,23 @@ object H5600LifeLog {
     // ---- decoding ----
 
     data class Slot(val timeUtc: LocalDateTime, val steps: Int, val energyRaw: Int?)
+    /** One daily summary record (frame 0x63): local date on the watch, total steps, step goal. */
+    data class Day(val date: java.time.LocalDate, val steps: Int, val goal: Int)
+
     data class Result(
         val headerTimeUtc: LocalDateTime,
         val headerSteps: Int,
         val headerEnergyRaw: Int,
         /** Newest first; slot i is 5*i minutes before the header time. Invalid slots dropped. */
         val slots: List<Slot>,
+        /** Daily summaries from frame 0x63 (izivkov's parse_lifelog.py layout: 109-byte records). */
+        val days: List<Day> = emptyList(),
     )
 
     private val FRAME_ORDER = intArrayOf(0x65, 0x50, 0x51, 0x52, 0x53, 0x56, 0x58, 0x59, 0x5A, 0x5B, 0x63, 0x72)
     private val HEADER_MAGIC = byteArrayOf(0x00, 0x0F, 0x00, 0x00, 0x00)
     private const val MAX_STEPS_PER_SLOT = 1000
+    private const val DAY_RECORD = 109
     private const val MAX_ENERGY_RAW_PER_SLOT = 5000
 
     /** Announcement `00 2e <idx> <len 3 bytes LE>` on DRSP -> (idx, len). Null for START/END. */
@@ -150,7 +156,23 @@ object H5600LifeLog {
                 slots += Slot(tUtc.minusMinutes(5L * i), st, en.takeIf { it <= MAX_ENERGY_RAW_PER_SLOT })
             }
         }
-        return Result(tUtc, headerSteps, headerEnergy, slots)
+        val days = mutableListOf<Day>()
+        spans[0x63]?.let { start ->
+            val end = ends.getValue(0x63)
+            var i = start + 5
+            while (i + DAY_RECORD <= end) {
+                val bcd = { b: Int -> val v = s[i + b].toInt() and 0xFF; (v shr 4) * 10 + (v and 0x0F) }
+                runCatching {
+                    val date = java.time.LocalDate.of(2000 + bcd(0), bcd(1), bcd(2))
+                    val steps = le.getInt(i + 10)
+                    val goal = le.getInt(i + 14)
+                    if (steps in 0..200_000) days += Day(date, steps, goal)
+                }
+                i += DAY_RECORD
+            }
+        }
+        timber.log.Timber.i("H5600 LifeLog: announced=$announced, ${slots.size} slots, days=$days")
+        return Result(tUtc, headerSteps, headerEnergy, slots, days)
     }
 
     /** First uint16 of each 4-byte record after the 5-byte frame header. */
