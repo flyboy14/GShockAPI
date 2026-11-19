@@ -101,9 +101,14 @@ object H5600LifeLog {
         val slots: List<Slot>,
         /** Daily summaries from frame 0x63 (izivkov's parse_lifelog.py layout: 109-byte records). */
         val days: List<Day> = emptyList(),
+        /**
+         * Every frame found, raw (5-byte header included), by type. The watch sends each record only
+         * once, so the app keeps undecoded frames (sleep 0x53, 0x5A, 0x5B, …) for later decoding.
+         */
+        val frames: Map<Int, ByteArray> = emptyMap(),
     )
 
-    private val FRAME_ORDER = intArrayOf(0x65, 0x50, 0x51, 0x52, 0x53, 0x56, 0x58, 0x59, 0x5A, 0x5B, 0x63, 0x72)
+    private val FRAME_ORDER = intArrayOf(0x65, 0x50, 0x51, 0x52, 0x53, 0x56, 0x58, 0x59, 0x5A, 0x5B, 0x63, 0x72, 0x73)
     private val HEADER_MAGIC = byteArrayOf(0x00, 0x0F, 0x00, 0x00, 0x00)
     private const val MAX_STEPS_PER_SLOT = 1000
     private const val DAY_RECORD = 109
@@ -172,7 +177,8 @@ object H5600LifeLog {
             }
         }
         timber.log.Timber.i("H5600 LifeLog: announced=$announced, ${slots.size} slots, days=$days")
-        return Result(tUtc, headerSteps, headerEnergy, slots, days)
+        val frames = spans.mapValues { (t, p) -> s.copyOfRange(p, ends.getValue(t)) }
+        return Result(tUtc, headerSteps, headerEnergy, slots, days, frames)
     }
 
     /** First uint16 of each 4-byte record after the 5-byte frame header. */
