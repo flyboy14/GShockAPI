@@ -120,7 +120,7 @@ class GShockAPI(private val context: Context) : IGShockAPI {
         val button =
             try {
                 Timber.i("Requesting watch button info")
-                withTimeoutOrNull(INITIALIZATION_REQUEST_TIMEOUT_MS) { getPressedButton() }
+                withTimeoutOrNull(BUTTON_INFO_TIMEOUT_MS) { getPressedButton() }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -149,6 +149,11 @@ class GShockAPI(private val context: Context) : IGShockAPI {
 
     private companion object {
         const val INITIALIZATION_REQUEST_TIMEOUT_MS = 3_000L
+
+        // The button reply is required, and on a slow link (e.g. a 390 ms connection interval) the
+        // request waits behind the notification subscriptions for several seconds before it is
+        // even sent, so a short timeout drops otherwise healthy connections.
+        const val BUTTON_INFO_TIMEOUT_MS = 15_000L
     }
 
     /**
