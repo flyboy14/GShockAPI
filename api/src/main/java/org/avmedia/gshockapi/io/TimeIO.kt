@@ -358,6 +358,19 @@ object TimeIO {
         }
     }
 
+    /**
+     * DW-H5600 light sun refresh: home location (0x24) + current time (0x09), nothing else. The
+     * watch recalculates its sun times on the time write, so these two packets bring the sun screen
+     * back after the watch lost its location (tested 2026-11-24), without the DST / city round
+     * trips of a full [set]. Uses the time zone of the last full sync.
+     */
+    fun setLight(timeMs: Long? = null, offset: Long? = null) {
+        H5600SettingsIO.writeLocationInTimeSync()
+        val t = timeMs ?: (Clock.systemDefaultZone().millis() + (offset ?: 0L))
+        val adjusted = TimeIOFunctional.adjustTimeForDSTAndConvert(t, state.casioTimezone)
+        IO.writeCmd(GetSetMode.SET, TimeIOFunctional.buildTimeCommand(adjusted))
+    }
+
     fun sendToWatchSet(message: String) {
         val dateTimeMs: Long = JSONObject(message).get("value") as Long
         val adjustedDateTime = TimeIOFunctional.adjustTimeForDSTAndConvert(dateTimeMs, state.casioTimezone)

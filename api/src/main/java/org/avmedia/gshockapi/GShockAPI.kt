@@ -889,6 +889,12 @@ class GShockAPI(private val context: Context) : IGShockAPI {
         org.avmedia.gshockapi.io.TimeIO.worldCityProvider = provider
     }
 
+    override suspend fun h5600RefreshSun(timeZone: String, offsetFormSystemTime: Long?) {
+        if (!H5600SettingsIO.isSupported()) return
+        if (ZoneId.getAvailableZoneIds().contains(timeZone)) TimeIO.setTimezone(timeZone)
+        TimeIO.setLight(offset = offsetFormSystemTime)
+    }
+
     override fun rememberH5600HomeLocation(latitude: Double, longitude: Double) =
         H5600SettingsIO.rememberHomeLocation(latitude, longitude)
 

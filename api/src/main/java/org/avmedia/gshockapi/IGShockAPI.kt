@@ -534,6 +534,12 @@ interface IGShockAPI {
      */
     fun setWorldCityProvider(provider: (() -> Pair<String, String>?)?) {}
 
+    /**
+     * DW-H5600: sun refresh with two packets only (home location + time), for keeping the sun
+     * screen filled between full syncs. Needs a full [setTime] on this connection first.
+     */
+    suspend fun h5600RefreshSun(timeZone: String = TimeZone.getDefault().id, offsetFormSystemTime: Long? = null) {}
+
     /** DW-H5600: remember the location (no write); it is re-sent after every time/city sync. */
     fun rememberH5600HomeLocation(latitude: Double, longitude: Double) {}
 
