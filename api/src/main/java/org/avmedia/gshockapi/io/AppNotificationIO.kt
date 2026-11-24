@@ -120,14 +120,32 @@ object AppNotificationIOFunctional {
      * Pure encoder: Encodes string to length-prefixed byte format.
      *
      * Format: [1 byte length][1 byte null][UTF-8 string]
+     * Text longer than 255 UTF-8 bytes is cut at a character boundary (long notifications used to
+     * throw and never reach the watch).
      * No side effects - pure transformation.
-     *
-     * @throws IllegalArgumentException if UTF-8 encoded string exceeds 255 bytes
      */
     fun writeLengthPrefixedString(text: String): ByteArray {
-        val encoded = text.toByteArray(Charsets.UTF_8)
-        require(encoded.size <= 255) { "Encoded string too long" }
+        val encoded = truncateUtf8(text, 255).toByteArray(Charsets.UTF_8)
         return byteArrayOf(encoded.size.toByte(), 0x00) + encoded
+    }
+
+    /** Longest prefix of [text] whose UTF-8 form fits in [maxBytes], never splitting a code point. Pure. */
+    fun truncateUtf8(text: String, maxBytes: Int): String {
+        var bytes = 0
+        var end = 0
+        while (end < text.length) {
+            val cp = text.codePointAt(end)
+            val size = when {
+                cp < 0x80 -> 1
+                cp < 0x800 -> 2
+                cp < 0x10000 -> 3
+                else -> 4
+            }
+            if (bytes + size > maxBytes) break
+            bytes += size
+            end += Character.charCount(cp)
+        }
+        return text.substring(0, end)
     }
 
     /**
@@ -137,20 +155,23 @@ object AppNotificationIOFunctional {
      * - Header (6 bytes): 00 00 00 00 00 01
      * - Type (1 byte), Timestamp (15 bytes)
      * - App name, title, short text, and full text as length-prefixed strings
+     * The whole packet is kept within [MAX_PACKET] bytes (one BLE write; Android cut longer ones
+     * at 247): the strings are shortened in order app, title, short text, text, each getting what
+     * the earlier ones left.
      * No side effects - pure transformation.
-     *
-     * @throws IllegalArgumentException if any encoded string exceeds 255 bytes
      */
-    fun encodeNotificationPacket(data: AppNotification): ByteArray =
-        buildList {
-            addAll(byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00, 0x01).toList())
-            add(data.type.value.toByte())
-            addAll(data.timestamp.toByteArray(Charsets.US_ASCII).toList())
-            addAll(writeLengthPrefixedString(data.app).toList())
-            addAll(writeLengthPrefixedString(data.title).toList())
-            addAll(writeLengthPrefixedString(data.shortText).toList())
-            addAll(writeLengthPrefixedString(data.text).toList())
-        }.toByteArray()
+    fun encodeNotificationPacket(data: AppNotification): ByteArray {
+        val head = byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00, 0x01, data.type.value.toByte()) +
+            data.timestamp.toByteArray(Charsets.US_ASCII)
+        var left = MAX_PACKET - head.size - 4 * 2 // four length prefixes
+        val fields = listOf(data.app, data.title, data.shortText, data.text).map { s ->
+            truncateUtf8(s, minOf(255, left.coerceAtLeast(0))).also { left -= it.toByteArray(Charsets.UTF_8).size }
+        }
+        return fields.fold(head) { acc, s -> acc + writeLengthPrefixedString(s) }
+    }
+
+    /** Largest notification packet sent in one write (ATT MTU 250 minus 3 header bytes). */
+    const val MAX_PACKET = 247
 }
 
 object AppNotificationIO {
